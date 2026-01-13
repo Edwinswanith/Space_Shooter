@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Void Runner</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --cyan: #00ffff;
+      --cyan-dim: #00aaaa;
+      --purple: #8b00ff;
+      --purple-bright: #bb44ff;
+      --magenta: #ff00aa;
+      --red: #ff3344;
+      --green: #00ff88;
+      --yellow: #ffcc00;
+      --bg-dark: #0a0a12;
+      --bg-darker: #050508;
+      --text-dim: #667788;
+      --text-muted: #445566;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      overflow: hidden;
+      background: var(--bg-darker);
+      font-family: 'Rajdhani', sans-serif;
+      color: #ffffff;
+    }
+
+    /* ============================================
+       GLOBAL EFFECTS
+    ============================================ */
+
+    /* CRT Scanline Overlay */
+    .crt-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 9999;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.15) 0px,
+        rgba(0, 0, 0, 0.15) 1px,
+        transparent 1px,
+        transparent 2px
+      );
+      animation: scanlines 0.1s linear infinite;
+    }
+
+    @keyframes scanlines {
+      0% { background-position: 0 0; }
+      100% { background-position: 0 2px; }
+    }
+
+    /* Vignette Effect */
+    .vignette {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 9998;
+      background: radial-gradient(ellipse at center, transparent 0%, transparent 60%, rgba(0,0,0,0.4) 100%);
+    }
+
+    /* ============================================
+       GAME CONTAINER
+    ============================================ */
+
+    #game-container {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+      background:
+        radial-gradient(ellipse at 20% 80%, rgba(139, 0, 255, 0.1) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(0, 255, 255, 0.05) 0%, transparent 40%),
+        var(--bg-dark);
+    }
+
+    canvas {
+      display: block;
+    }
+
+    /* Animated Grid Background */
+    .grid-bg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      opacity: 0.03;
+      background-image:
+        linear-gradient(var(--cyan) 1px, transparent 1px),
+        linear-gradient(90deg, var(--cyan) 1px, transparent 1px);
+      background-size: 50px 50px;
+      animation: gridMove 20s linear infinite;
+    }
+
+    @keyframes gridMove {
+      0% { transform: perspective(500px) rotateX(60deg) translateY(0); }
+      100% { transform: perspective(500px) rotateX(60deg) translateY(50px); }
+    }
+
+    /* ============================================
+       HUD OVERLAY
+    ============================================ */
+
+    #hud {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      font-family: 'Orbitron', sans-serif;
+    }
+
+    /* Corner Frame Decorations */
+    .corner-frame {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      pointer-events: none;
+      opacity: 0.6;
+    }
+
+    .corner-frame::before,
+    .corner-frame::after {
+      content: '';
+      position: absolute;
+      background: var(--cyan);
+    }
+
+    .corner-frame.top-left { top: 10px; left: 10px; }
+    .corner-frame.top-left::before { width: 30px; height: 2px; top: 0; left: 0; }
+    .corner-frame.top-left::after { width: 2px; height: 30px; top: 0; left: 0; }
+
+    .corner-frame.top-right { top: 10px; right: 10px; }
+    .corner-frame.top-right::before { width: 30px; height: 2px; top: 0; right: 0; }
+    .corner-frame.top-right::after { width: 2px; height: 30px; top: 0; right: 0; }
+
+    .corner-frame.bottom-left { bottom: 10px; left: 10px; }
+    .corner-frame.bottom-left::before { width: 30px; height: 2px; bottom: 0; left: 0; }
+    .corner-frame.bottom-left::after { width: 2px; height: 30px; bottom: 0; left: 0; }
+
+    .corner-frame.bottom-right { bottom: 10px; right: 10px; }
+    .corner-frame.bottom-right::before { width: 30px; height: 2px; bottom: 0; right: 0; }
+    .corner-frame.bottom-right::after { width: 2px; height: 30px; bottom: 0; right: 0; }
+
+    /* Shields */
+    #shields {
+      position: absolute;
+      top: 25px;
+      left: 25px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .shield-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      color: var(--text-dim);
+      letter-spacing: 2px;
+      margin-right: 5px;
+    }
+
+    .shield {
+      width: 20px;
+      height: 20px;
+      background: var(--cyan);
+      clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      box-shadow: 0 0 10px var(--cyan), inset 0 0 10px rgba(255,255,255,0.3);
+    }
+
+    .shield.empty {
+      background: transparent;
+      box-shadow: inset 0 0 0 2px var(--cyan-dim);
+      opacity: 0.3;
+    }
+
+    .shield.damaged {
+      animation: shieldDamage 0.4s cubic-bezier(0.36, 0, 0.66, -0.56);
+    }
+
+    @keyframes shieldDamage {
+      0% { transform: scale(1); background: var(--cyan); }
+      50% { transform: scale(1.5); background: var(--red); filter: brightness(2); }
+      100% { transform: scale(1); background: var(--cyan); }
+    }
+
+    /* Echo Counter */
+    #echo-counter {
+      position: absolute;
+      top: 25px;
+      right: 25px;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--cyan);
+      text-shadow: 0 0 20px var(--cyan), 0 0 40px var(--cyan);
+      letter-spacing: 2px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #echo-counter::before {
+      content: 'ECHO';
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      color: var(--text-dim);
+      letter-spacing: 2px;
+    }
+
+    #echo-counter.pulse {
+      animation: echoPulse 0.3s ease;
+    }
+
+    @keyframes echoPulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.3); filter: brightness(1.5); }
+      100% { transform: scale(1); }
+    }
+
+    /* Graze Combo */
+    #graze-combo {
+      position: absolute;
+      top: 55px;
+      right: 25px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--green);
+      opacity: 0;
+      transition: all 0.3s ease;
+      text-shadow: 0 0 10px var(--green);
+    }
+
+    #graze-combo.active {
+      opacity: 1;
+      animation: grazeGlow 0.5s ease infinite alternate;
+    }
+
+    @keyframes grazeGlow {
+      from { text-shadow: 0 0 10px var(--green); }
+      to { text-shadow: 0 0 20px var(--green), 0 0 30px var(--green); }
+    }
+
+    /* Void Pressure Bar */
+    #void-bar {
+      position: absolute;
+      left: 15px;
+      top: 80px;
+      bottom: 80px;
+      width: 6px;
+      background: rgba(139, 0, 255, 0.1);
+      border: 1px solid rgba(139, 0, 255, 0.3);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    #void-fill {
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      background: linear-gradient(to top, var(--purple), var(--purple-bright));
+      transition: height 0.2s ease;
+      box-shadow: 0 0 15px var(--purple), inset 0 0 10px rgba(255,255,255,0.2);
+    }
+
+    #void-bar.warning #void-fill {
+      background: linear-gradient(to top, #aa8800, var(--yellow));
+      box-shadow: 0 0 15px var(--yellow);
+    }
+
+    #void-bar.danger #void-fill {
+      background: linear-gradient(to top, #aa0022, var(--red));
+      box-shadow: 0 0 20px var(--red);
+      animation: voidPulseDanger 0.3s ease infinite;
+    }
+
+    @keyframes voidPulseDanger {
+      0%, 100% { opacity: 1; box-shadow: 0 0 20px var(--red); }
+      50% { opacity: 0.7; box-shadow: 0 0 40px var(--red); }
+    }
+
+    #void-bar.accelerating #void-fill {
+      background: linear-gradient(to top, #660044, var(--magenta));
+      box-shadow: 0 0 15px var(--magenta);
+      animation: voidPulseAccel 0.8s ease infinite;
+    }
+
+    @keyframes voidPulseAccel {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.8; }
+    }
+
+    #void-fill.pushback {
+      background: linear-gradient(to top, #008844, var(--green)) !important;
+      box-shadow: 0 0 20px var(--green) !important;
+    }
+
+    /* Void State Indicator */
+    #void-indicator {
+      position: absolute;
+      left: 30px;
+      bottom: 25px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 2px;
+      opacity: 0.9;
+    }
+
+    #void-indicator .void-state-text {
+      color: var(--purple);
+      margin-bottom: 4px;
+    }
+
+    #void-indicator .void-state-status {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--green);
+      text-shadow: 0 0 10px currentColor;
+      transition: all 0.3s ease;
+    }
+
+    #void-indicator.accelerating .void-state-status {
+      color: var(--yellow);
+      animation: statusFlicker 0.8s ease infinite;
+    }
+
+    #void-indicator.danger .void-state-status {
+      color: var(--red);
+      animation: statusFlicker 0.3s ease infinite;
+    }
+
+    @keyframes statusFlicker {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    /* Zone Progress */
+    #zone-progress {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 280px;
+      height: 3px;
+      background: rgba(0, 255, 255, 0.1);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    #zone-progress::before {
+      content: 'ZONE PROGRESS';
+      position: absolute;
+      top: -18px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px;
+      color: var(--text-dim);
+      letter-spacing: 3px;
+    }
+
+    #zone-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--cyan), var(--purple-bright));
+      border-radius: 2px;
+      transition: width 0.3s ease;
+      box-shadow: 0 0 10px var(--cyan);
+    }
+
+    /* Mutations */
+    #mutations {
+      position: absolute;
+      bottom: 60px;
+      left: 25px;
+      display: flex;
+      gap: 8px;
+    }
+
+    /* Dash Cooldown */
+    #dash-cooldown {
+      position: absolute;
+      bottom: 25px;
+      right: 25px;
+      width: 44px;
+      height: 44px;
+    }
+
+    .dash-ring {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 2px solid var(--text-muted);
+      position: relative;
+      transition: all 0.3s ease;
+    }
+
+    .dash-ring::before {
+      content: 'DASH';
+      position: absolute;
+      top: -16px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 8px;
+      color: var(--text-dim);
+      letter-spacing: 2px;
+    }
+
+    .dash-ring.ready {
+      border-color: var(--cyan);
+      box-shadow: 0 0 15px var(--cyan), inset 0 0 15px rgba(0, 255, 255, 0.2);
+      animation: dashReady 1.5s ease infinite;
+    }
+
+    @keyframes dashReady {
+      0%, 100% { box-shadow: 0 0 15px var(--cyan), inset 0 0 15px rgba(0, 255, 255, 0.2); }
+      50% { box-shadow: 0 0 25px var(--cyan), inset 0 0 20px rgba(0, 255, 255, 0.3); }
+    }
+
+    /* Screen flash effect */
+    #screen-flash {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--red);
+      opacity: 0;
+      pointer-events: none;
+      mix-blend-mode: overlay;
+      transition: opacity 0.05s ease;
+    }
+
+    #screen-flash.active {
+      opacity: 0.5;
+    }
+
+    /* ============================================
+       MENU OVERLAY
+    ============================================ */
+
+    #menu-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background:
+        radial-gradient(ellipse at 30% 70%, rgba(139, 0, 255, 0.15) 0%, transparent 50%),
+        radial-gradient(ellipse at 70% 30%, rgba(0, 255, 255, 0.08) 0%, transparent 40%),
+        linear-gradient(180deg, var(--bg-darker) 0%, var(--bg-dark) 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: auto;
+    }
+
+    #menu-overlay.hidden {
+      display: none;
+    }
+
+    /* Animated Background Grid for Menu */
+    .menu-grid {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      opacity: 0.04;
+      background-image:
+        linear-gradient(var(--purple) 1px, transparent 1px),
+        linear-gradient(90deg, var(--purple) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    /* Title with Glitch Effect */
+    .menu-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 56px;
+      font-weight: 900;
+      letter-spacing: 8px;
+      color: #ffffff;
+      margin-bottom: 10px;
+      position: relative;
+      text-shadow:
+        0 0 20px var(--purple),
+        0 0 40px var(--purple),
+        0 0 80px rgba(139, 0, 255, 0.5);
+      animation: titleFloat 4s ease-in-out infinite;
+    }
+
+    .menu-title::before,
+    .menu-title::after {
+      content: 'VOID RUNNER';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .menu-title::before {
+      color: var(--cyan);
+      animation: glitch1 3s infinite linear alternate-reverse;
+      clip-path: polygon(0 0, 100% 0, 100% 35%, 0 35%);
+      transform: translateX(-2px);
+      opacity: 0.8;
+    }
+
+    .menu-title::after {
+      color: var(--magenta);
+      animation: glitch2 2s infinite linear alternate-reverse;
+      clip-path: polygon(0 65%, 100% 65%, 100% 100%, 0 100%);
+      transform: translateX(2px);
+      opacity: 0.8;
+    }
+
+    @keyframes titleFloat {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
+
+    @keyframes glitch1 {
+      0%, 90%, 100% { transform: translateX(0); }
+      92% { transform: translateX(-3px); }
+      94% { transform: translateX(3px); }
+      96% { transform: translateX(-2px); }
+      98% { transform: translateX(2px); }
+    }
+
+    @keyframes glitch2 {
+      0%, 85%, 100% { transform: translateX(0); }
+      87% { transform: translateX(2px); }
+      89% { transform: translateX(-2px); }
+      91% { transform: translateX(3px); }
+      93% { transform: translateX(-3px); }
+    }
+
+    .menu-subtitle {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 8px;
+      color: var(--text-dim);
+      margin-bottom: 60px;
+      text-transform: uppercase;
+    }
+
+    /* Menu Buttons */
+    .menu-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .menu-btn {
+      width: 220px;
+      height: 52px;
+      background: transparent;
+      border: none;
+      color: #ffffff;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 4px;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      pointer-events: auto;
+      overflow: hidden;
+    }
+
+    /* Button border effect with clip-path */
+    .menu-btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border: 2px solid var(--text-muted);
+      clip-path: polygon(
+        0 10px, 10px 0, calc(100% - 10px) 0, 100% 10px,
+        100% calc(100% - 10px), calc(100% - 10px) 100%, 10px 100%, 0 calc(100% - 10px)
+      );
+      transition: all 0.3s ease;
+    }
+
+    /* Scan line effect */
+    .menu-btn::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.1), transparent);
+      transition: left 0.5s ease;
+    }
+
+    .menu-btn:hover::after {
+      left: 100%;
+    }
+
+    .menu-btn:hover {
+      color: var(--cyan);
+      text-shadow: 0 0 20px var(--cyan);
+      transform: scale(1.02);
+    }
+
+    .menu-btn:hover::before {
+      border-color: var(--cyan);
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.3), inset 0 0 20px rgba(0, 255, 255, 0.05);
+    }
+
+    .menu-btn:active {
+      transform: scale(0.98);
+    }
+
+    .menu-btn.primary {
+      color: var(--cyan);
+      text-shadow: 0 0 10px var(--cyan);
+    }
+
+    .menu-btn.primary::before {
+      border-color: var(--cyan);
+      box-shadow: 0 0 15px rgba(0, 255, 255, 0.3), inset 0 0 30px rgba(0, 255, 255, 0.05);
+      animation: primaryPulse 2s ease infinite;
+    }
+
+    @keyframes primaryPulse {
+      0%, 100% { box-shadow: 0 0 15px rgba(0, 255, 255, 0.3), inset 0 0 30px rgba(0, 255, 255, 0.05); }
+      50% { box-shadow: 0 0 30px rgba(0, 255, 255, 0.5), inset 0 0 40px rgba(0, 255, 255, 0.1); }
+    }
+
+    .menu-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+      color: var(--text-muted);
+    }
+
+    .menu-btn:disabled::before {
+      border-color: var(--text-muted);
+      box-shadow: none;
+    }
+
+    .menu-btn:disabled:hover {
+      transform: none;
+      color: var(--text-muted);
+      text-shadow: none;
+    }
+
+    .menu-btn:disabled::after {
+      display: none;
+    }
+
+    /* Menu Stats */
+    .menu-stats {
+      position: absolute;
+      bottom: 30px;
+      display: flex;
+      gap: 50px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 2px;
+      color: var(--text-dim);
+    }
+
+    .menu-stats .stat-value {
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 700;
+      color: var(--cyan);
+      text-shadow: 0 0 10px var(--cyan);
+      margin-left: 8px;
+    }
+
+    /* Version Tag */
+    .version-tag {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 10px;
+      color: var(--text-muted);
+      letter-spacing: 2px;
+    }
+
+    /* ============================================
+       DEATH SCREEN
+    ============================================ */
+
+    #death-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background:
+        radial-gradient(ellipse at center, rgba(255, 0, 50, 0.1) 0%, transparent 60%),
+        linear-gradient(180deg, var(--bg-darker) 0%, var(--bg-dark) 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: auto;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.5s ease, visibility 0.5s ease;
+    }
+
+    #death-overlay.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .death-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 42px;
+      font-weight: 900;
+      letter-spacing: 6px;
+      color: var(--red);
+      text-shadow:
+        0 0 20px var(--red),
+        0 0 40px var(--red),
+        0 0 80px rgba(255, 50, 50, 0.5);
+      margin-bottom: 8px;
+      animation: deathGlitch 0.5s ease forwards;
+    }
+
+    @keyframes deathGlitch {
+      0% { opacity: 0; transform: scale(1.5) translateY(-20px); filter: blur(10px); }
+      30% { opacity: 1; transform: scale(0.95) translateY(5px); filter: blur(0); }
+      50% { transform: scale(1.02) translateX(-3px); }
+      70% { transform: scale(0.99) translateX(3px); }
+      100% { transform: scale(1) translateX(0); }
+    }
+
+    .death-cause {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 13px;
+      letter-spacing: 3px;
+      color: var(--text-dim);
+      margin-bottom: 50px;
+      text-transform: uppercase;
+      opacity: 0;
+      animation: fadeSlideIn 0.5s ease 0.3s forwards;
+    }
+
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .death-stats {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 50px;
+    }
+
+    .death-stat {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 2px;
+      color: var(--text-dim);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      min-width: 280px;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      opacity: 0;
+      animation: fadeSlideIn 0.4s ease forwards;
+    }
+
+    .death-stat:nth-child(1) { animation-delay: 0.4s; }
+    .death-stat:nth-child(2) { animation-delay: 0.5s; }
+    .death-stat:nth-child(3) { animation-delay: 0.6s; }
+    .death-stat:nth-child(4) { animation-delay: 0.7s; }
+
+    .death-stat span {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--cyan);
+      text-shadow: 0 0 10px var(--cyan);
+    }
+
+    .death-stat.lost span {
+      color: var(--red);
+      text-shadow: 0 0 10px var(--red);
+    }
+
+    .death-continue {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 4px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      opacity: 0;
+      animation: fadeSlideIn 0.5s ease 1s forwards, continuePulse 2s ease 1.5s infinite;
+    }
+
+    @keyframes continuePulse {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; color: var(--cyan); }
+    }
+
+    /* ============================================
+       HIDE HUD ON MENU/DEATH
+    ============================================ */
+
+    .hud-gameplay-only {
+      transition: opacity 0.3s ease;
+    }
+
+    #game-container:has(#menu-overlay:not(.hidden)) .hud-gameplay-only,
+    #game-container:has(#menu-overlay:not(.hidden)) .corner-frame {
+      opacity: 0 !important;
+      pointer-events: none;
+    }
+
+    #game-container:has(#death-overlay.visible) .hud-gameplay-only,
+    #game-container:has(#death-overlay.visible) .corner-frame {
+      opacity: 0.2 !important;
+    }
+  </style>
+</head>
+<body>
+  <!-- Global Effects -->
+  <div class="crt-overlay"></div>
+  <div class="vignette"></div>
+
+  <div id="game-container">
+    <!-- Background Grid -->
+    <div class="grid-bg"></div>
+
+    <!-- HUD Overlay -->
+    <div id="hud">
+      <!-- Corner Frames -->
+      <div class="corner-frame top-left hud-gameplay-only"></div>
+      <div class="corner-frame top-right hud-gameplay-only"></div>
+      <div class="corner-frame bottom-left hud-gameplay-only"></div>
+      <div class="corner-frame bottom-right hud-gameplay-only"></div>
+
+      <div id="shields" class="hud-gameplay-only">
+        <span class="shield-label">SHIELDS</span>
+        <div class="shield"></div>
+        <div class="shield"></div>
+        <div class="shield"></div>
+      </div>
+
+      <div id="echo-counter" class="hud-gameplay-only">0</div>
+      <div id="graze-combo" class="hud-gameplay-only">x1</div>
+
+      <div id="void-bar" class="hud-gameplay-only">
+        <div id="void-fill" style="height: 0%"></div>
+      </div>
+
+      <div id="void-indicator" class="hud-gameplay-only">
+        <div class="void-state-text">VOID STATUS</div>
+        <div class="void-state-status">CALM</div>
+      </div>
+
+      <div id="zone-progress" class="hud-gameplay-only">
+        <div id="zone-fill" style="width: 0%"></div>
+      </div>
+
+      <div id="mutations" class="hud-gameplay-only"></div>
+
+      <div id="dash-cooldown" class="hud-gameplay-only">
+        <div class="dash-ring ready"></div>
+      </div>
+
+      <div id="screen-flash"></div>
+    </div>
+
+    <!-- Death Screen -->
+    <div id="death-overlay">
+      <div class="death-title">VOID CONSUMED</div>
+      <div class="death-cause" id="death-cause">Swallowed by the rising void</div>
+      <div class="death-stats">
+        <div class="death-stat">TIME SURVIVED<span id="death-time">0s</span></div>
+        <div class="death-stat">ENEMIES DESTROYED<span id="death-kills">0</span></div>
+        <div class="death-stat">ECHOES EARNED<span id="death-echoes">0</span></div>
+        <div class="death-stat lost">ECHOES LOST<span id="death-lost">0</span></div>
+      </div>
+      <div class="death-continue">[ Press any key to continue ]</div>
+    </div>
+
+    <!-- Main Menu -->
+    <div id="menu-overlay">
+      <div class="menu-grid"></div>
+      <div class="version-tag">v0.1.0</div>
+
+      <h1 class="menu-title">VOID RUNNER</h1>
+      <p class="menu-subtitle">Escape the rising darkness</p>
+
+      <div class="menu-buttons">
+        <button class="menu-btn primary" id="btn-escape">ESCAPE</button>
+        <button class="menu-btn" id="btn-hangar" disabled title="Coming soon">HANGAR</button>
+        <button class="menu-btn" id="btn-settings" disabled title="Coming soon">SETTINGS</button>
+      </div>
+
+      <div class="menu-stats">
+        <div>ECHOES<span class="stat-value" id="menu-echoes">0</span></div>
+        <div>BEST ZONE<span class="stat-value" id="menu-best-zone">0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
