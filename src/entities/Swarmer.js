@@ -37,6 +37,7 @@ export class Swarmer {
     // Timers
     this.time = 0;
     this.shootTimer = 0;
+    this.flashTimer = 0;  // For damage flash effect
 
     // Create mesh
     this.mesh = null;
@@ -92,6 +93,7 @@ export class Swarmer {
 
     this.time = Math.random() * Math.PI * 2; // Random start phase
     this.shootTimer = Math.random() * CONFIG.shootInterval; // Random initial delay
+    this.flashTimer = 0;
 
     // Update mesh
     this.mesh.position.x = this.position.x;
@@ -103,6 +105,14 @@ export class Swarmer {
 
   update(dt, playerPos, bulletPool, gameWidth, gameHeight) {
     if (!this.active || this.shouldRemove) return;
+
+    // Handle damage flash timer
+    if (this.flashTimer > 0) {
+      this.flashTimer -= dt;
+      if (this.flashTimer <= 0) {
+        this.mesh.material.color.setHex(this.isElite ? 0xffd700 : 0xff3333);
+      }
+    }
 
     this.time += dt;
 
@@ -160,13 +170,9 @@ export class Swarmer {
   takeDamage(amount) {
     this.health -= amount;
 
-    // Flash white on damage
+    // Flash white on damage (using timer instead of setTimeout)
     this.mesh.material.color.setHex(0xffffff);
-    setTimeout(() => {
-      if (this.active) {
-        this.mesh.material.color.setHex(this.isElite ? 0xffd700 : 0xff3333);
-      }
-    }, 50);
+    this.flashTimer = 0.05;  // 50ms flash duration
   }
 
   deactivate() {
@@ -176,6 +182,7 @@ export class Swarmer {
   onRelease() {
     this.mesh.visible = false;
     this.shouldRemove = false;
+    this.flashTimer = 0;
   }
 
   // Get hitbox for collision detection

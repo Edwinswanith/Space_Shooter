@@ -67,6 +67,10 @@ export class Player {
     this.mesh = null;
     this.afterimages = [];
 
+    // Audio callbacks
+    this.onShoot = null;
+    this.onDash = null;
+
     // Create visual
     this.createMesh();
   }
@@ -182,6 +186,8 @@ export class Player {
     this.dashCooldown = CONFIG.dashCooldown;
     this.isInvincible = true;
 
+    if (this.onDash) this.onDash();
+
     // Calculate dash direction (toward mouse)
     const dx = mousePos.x - this.position.x;
     const dy = mousePos.y - this.position.y;
@@ -275,6 +281,8 @@ export class Player {
       vy: CONFIG.bulletSpeed,
       damage: CONFIG.baseDamage
     });
+
+    if (this.onShoot) this.onShoot();
   }
 
   takeDamage() {

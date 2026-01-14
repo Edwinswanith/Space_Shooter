@@ -10,6 +10,8 @@ import { GrazeSystem } from './systems/GrazeSystem.js';
 import { SpawnSystem } from './systems/SpawnSystem.js';
 import { EchoSystem } from './systems/EchoSystem.js';
 import { HUD } from './ui/HUD.js';
+import { AudioManager } from './audio/AudioManager.js';
+import { ParticleSystem } from './graphics/ParticleSystem.js';
 
 export class Game {
   constructor() {
@@ -24,6 +26,8 @@ export class Game {
     this.grazeSystem = null;
     this.spawnSystem = null;
     this.echoSystem = null;
+    this.audio = null;
+    this.particleSystem = null;
 
     // Object pools
     this.playerBulletPool = null;
@@ -67,6 +71,7 @@ export class Game {
     this.voidSystem = new VoidSystem(this.GAME_HEIGHT, this.renderer.scene);
     this.grazeSystem = new GrazeSystem();
     this.collisionSystem = new CollisionSystem();
+    this.particleSystem = new ParticleSystem(this.renderer.scene);
 
     // Initialize object pools
     this.playerBulletPool = new ObjectPool(
@@ -89,6 +94,17 @@ export class Game {
 
     // Initialize player
     this.player = new Player(this.renderer.scene, this.playerBulletPool, this.GAME_WIDTH, this.GAME_HEIGHT);
+
+    // Initialize audio
+    this.audio = new AudioManager();
+    // Initialize audio on first user interaction (required by browsers)
+    const initAudio = () => this.audio.init();
+    document.addEventListener('click', initAudio, { once: true });
+    document.addEventListener('keydown', initAudio, { once: true });
+
+    // Wire up player audio callbacks
+    this.player.onShoot = () => this.audio.playShoot();
+    this.player.onDash = () => this.audio.playDash();
 
     // Initialize HUD
     this.hud = new HUD();
@@ -151,7 +167,9 @@ export class Game {
     this.voidSystem.reset();
     this.grazeSystem.reset();
     this.spawnSystem.reset();
+    this.spawnSystem.configure(1.8, 0.10);  // Enable 10% elite spawn chance
     this.echoSystem.resetRun();
+    this.particleSystem.clear();
 
     // Reset run statistics
     this.runStats = {
@@ -192,6 +210,10 @@ export class Game {
     const currentZone = Math.floor(this.runStats.timeSurvived / 90) + 1;
     if (currentZone > this.runStats.zoneReached) {
       this.runStats.zoneReached = currentZone;
+      // Reset spawn system zone timer for new zone
+      this.spawnSystem.zoneTimer = 0;
+      // Increase elite chance per zone (Zone 2: 10%, Zone 3: 15%, etc.)
+      this.spawnSystem.eliteChance = Math.min(0.10 + (currentZone - 2) * 0.05, 0.25);
     }
 
     // Update input
@@ -217,6 +239,9 @@ export class Game {
     // Update void system
     this.voidSystem.update(dt);
 
+    // Update particle system
+    this.particleSystem.update(dt);
+
     // Update graze system
     const grazeResult = this.grazeSystem.update(
       dt,
@@ -228,6 +253,12 @@ export class Game {
       this.echoSystem.addEchoes(grazeResult.echoes);
       this.voidSystem.onGraze();
       this.hud.onGraze(grazeResult.combo);
+      this.audio.playGraze();
+
+      // Spawn spark at each graze position
+      for (const pos of grazeResult.grazePositions) {
+        this.particleSystem.spark(pos.x, pos.y, 0x00ffff, 4);
+      }
     }
 
     // Check collisions
@@ -289,8 +320,12 @@ export class Game {
     // Push back void
     this.voidSystem.onKill(enemy.isElite);
 
-    // Spawn particles (TODO)
-    // this.particleSystem.explosion(enemy.position.x, enemy.position.y);
+    // Play death sound
+    this.audio.playEnemyDeath();
+
+    // Spawn explosion particles
+    const color = enemy.isElite ? 0xffd700 : 0xff3333;
+    this.particleSystem.explosion(enemy.position.x, enemy.position.y, color, enemy.isElite ? 20 : 12);
 
     // Remove enemy
     enemy.deactivate();
@@ -300,6 +335,10 @@ export class Game {
     this.player.takeDamage();
     this.grazeSystem.onPlayerHit();
     this.hud.onDamage();
+    this.audio.playPlayerHit();
+
+    // Screen shake
+    this.renderer.shake(10);
 
     // Screen flash
     const flash = document.getElementById('screen-flash');

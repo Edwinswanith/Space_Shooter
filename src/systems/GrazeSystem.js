@@ -41,7 +41,8 @@ export class GrazeSystem {
     const result = {
       grazed: false,
       echoes: 0,
-      combo: this.combo
+      combo: this.combo,
+      grazePositions: []
     };
 
     // Skip if player is invincible (dashing)
@@ -78,6 +79,7 @@ export class GrazeSystem {
         result.grazed = true;
         result.echoes += echoes;
         result.combo = this.combo;
+        result.grazePositions.push({ x: bullet.position.x, y: bullet.position.y });
       }
     }
 
