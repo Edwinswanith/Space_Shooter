@@ -133,6 +133,56 @@ export class AudioManager {
     osc.stop(this.ctx.currentTime + 0.2);
   }
 
+  // Bright chime for crystal collection
+  playCrystalCollect() {
+    if (!this.initialized) return;
+    this.ensureContext();
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+
+    osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1600, this.ctx.currentTime + 0.1);
+    osc.type = 'sine';
+
+    gain.gain.setValueAtTime(this.sfxVolume * 0.3, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+
+    osc.start(this.ctx.currentTime);
+    osc.stop(this.ctx.currentTime + 0.15);
+  }
+
+  // Power-up fanfare for level-up
+  playLevelUp() {
+    if (!this.initialized) return;
+    this.ensureContext();
+
+    // Ascending chord: C5, E5, G5, C6
+    const notes = [523, 659, 784, 1047];
+
+    notes.forEach((freq, i) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.frequency.value = freq;
+      osc.type = 'square';
+
+      const startTime = this.ctx.currentTime + i * 0.08;
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(this.sfxVolume * 0.2, startTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.2);
+
+      osc.start(startTime);
+      osc.stop(startTime + 0.2);
+    });
+  }
+
   // Create white noise (for explosion textures)
   createNoise(duration) {
     if (!this.ctx) return;

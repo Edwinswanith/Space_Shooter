@@ -9,6 +9,7 @@ export class HUD {
     this.voidIndicator = null;
     this.zoneFill = null;
     this.dashRing = null;
+    this.mutationPips = null;
 
     // State tracking for animations
     this.lastEchoes = 0;
@@ -26,6 +27,7 @@ export class HUD {
     this.voidIndicator = document.getElementById('void-indicator');
     this.zoneFill = document.getElementById('zone-fill');
     this.dashRing = document.querySelector('.dash-ring');
+    this.mutationPips = document.querySelectorAll('.mutation-pip');
   }
 
   reset() {
@@ -56,6 +58,12 @@ export class HUD {
 
     // Reset dash
     this.dashRing.classList.add('ready');
+
+    // Reset mutations
+    this.mutationPips.forEach(pip => {
+      pip.style.backgroundColor = 'transparent';
+      pip.classList.remove('active');
+    });
 
     this.lastVoidState = 'normal';
   }
@@ -223,6 +231,34 @@ export class HUD {
   // Update zone progress (0-1)
   setZoneProgress(progress) {
     this.zoneFill.style.width = `${progress * 100}%`;
+  }
+
+  // Update mutation pips display
+  updateMutations(stacks) {
+    const types = ['fury', 'scatter', 'pierce', 'seeker'];
+    const colors = {
+      fury: '#ff4444',
+      scatter: '#ffff44',
+      pierce: '#4444ff',
+      seeker: '#44ff44'
+    };
+
+    let pipIndex = 0;
+    for (const type of types) {
+      for (let i = 0; i < stacks[type]; i++) {
+        if (pipIndex < this.mutationPips.length) {
+          this.mutationPips[pipIndex].style.backgroundColor = colors[type];
+          this.mutationPips[pipIndex].classList.add('active');
+          pipIndex++;
+        }
+      }
+    }
+
+    // Clear remaining pips
+    for (let i = pipIndex; i < this.mutationPips.length; i++) {
+      this.mutationPips[i].style.backgroundColor = 'transparent';
+      this.mutationPips[i].classList.remove('active');
+    }
   }
 
   // Show/hide HUD

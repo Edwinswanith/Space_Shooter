@@ -4,14 +4,26 @@ import { ObjectPool } from './systems/ObjectPool.js';
 import { Player } from './entities/Player.js';
 import { Bullet } from './entities/Bullet.js';
 import { Swarmer } from './entities/Swarmer.js';
+import { Drifter } from './entities/Drifter.js';
+import { Turret } from './entities/Turret.js';
 import { CollisionSystem } from './systems/CollisionSystem.js';
 import { VoidSystem } from './systems/VoidSystem.js';
 import { GrazeSystem } from './systems/GrazeSystem.js';
 import { SpawnSystem } from './systems/SpawnSystem.js';
 import { EchoSystem } from './systems/EchoSystem.js';
+import { CrystalSystem } from './systems/CrystalSystem.js';
+import { MutationSystem } from './systems/MutationSystem.js';
+import { LevelUpSystem } from './systems/LevelUpSystem.js';
+import { ZoneSystem } from './systems/ZoneSystem.js';
+import { LeaderboardSystem } from './systems/LeaderboardSystem.js';
 import { HUD } from './ui/HUD.js';
+import { LevelUpUI } from './ui/LevelUpUI.js';
+import { CheckpointUI } from './ui/CheckpointUI.js';
+import { ZoneIntroUI } from './ui/ZoneIntroUI.js';
 import { AudioManager } from './audio/AudioManager.js';
 import { ParticleSystem } from './graphics/ParticleSystem.js';
+import { GAME_MODES, getMode, getEndlessDifficulty, getEndlessEnemyWeights } from './data/ModeConfig.js';
+import { getZoneConfig } from './data/ZoneConfig.js';
 
 export class Game {
   constructor() {
@@ -26,13 +38,23 @@ export class Game {
     this.grazeSystem = null;
     this.spawnSystem = null;
     this.echoSystem = null;
+    this.crystalSystem = null;
+    this.mutationSystem = null;
+    this.levelUpSystem = null;
+    this.zoneSystem = null;
+    this.leaderboard = null;
+    this.levelUpUI = null;
+    this.checkpointUI = null;
+    this.zoneIntroUI = null;
     this.audio = null;
     this.particleSystem = null;
+
+    // Crystal/upgrade multipliers
+    this.crystalMagnetMultiplier = 1;
 
     // Object pools
     this.playerBulletPool = null;
     this.enemyBulletPool = null;
-    this.enemyPool = null;
 
     // Game state
     this.isRunning = false;
@@ -40,6 +62,9 @@ export class Game {
     this.isInMenu = true;
     this.isShowingDeathScreen = false;
     this.lastTime = 0;
+
+    // Current game mode
+    this.currentMode = null;
 
     // Game dimensions (fixed game units)
     this.GAME_WIDTH = 800;
@@ -51,7 +76,7 @@ export class Game {
       enemiesKilled: 0,
       echoesEarned: 0,
       echoesLost: 0,
-      zoneReached: 1
+      zone: 1
     };
 
     // Persistent stats
@@ -72,6 +97,7 @@ export class Game {
     this.grazeSystem = new GrazeSystem();
     this.collisionSystem = new CollisionSystem();
     this.particleSystem = new ParticleSystem(this.renderer.scene);
+    this.leaderboard = new LeaderboardSystem();
 
     // Initialize object pools
     this.playerBulletPool = new ObjectPool(
@@ -84,20 +110,42 @@ export class Game {
       200
     );
 
-    this.enemyPool = new ObjectPool(
-      () => new Swarmer(this.renderer.scene),
-      50
-    );
+    // Initialize spawn system with multi-enemy support
+    this.spawnSystem = new SpawnSystem(this.GAME_WIDTH, this.GAME_HEIGHT);
 
-    // Initialize spawn system
-    this.spawnSystem = new SpawnSystem(this.enemyPool, this.GAME_WIDTH, this.GAME_HEIGHT);
+    // Register enemy pools
+    this.spawnSystem.registerPool('swarmer', new ObjectPool(
+      () => new Swarmer(this.renderer.scene),
+      30
+    ));
+    this.spawnSystem.registerPool('drifter', new ObjectPool(
+      () => new Drifter(this.renderer.scene),
+      20
+    ));
+    this.spawnSystem.registerPool('turret', new ObjectPool(
+      () => new Turret(this.renderer.scene),
+      15
+    ));
+
+    // Initialize zone system
+    this.zoneSystem = new ZoneSystem();
+
+    // Initialize crystal and mutation systems
+    this.crystalSystem = new CrystalSystem(this.renderer.scene, this.GAME_WIDTH, this.GAME_HEIGHT);
+    this.mutationSystem = new MutationSystem();
+    this.levelUpSystem = new LevelUpSystem();
+    this.levelUpUI = new LevelUpUI();
+    this.checkpointUI = new CheckpointUI();
+    this.zoneIntroUI = new ZoneIntroUI();
 
     // Initialize player
     this.player = new Player(this.renderer.scene, this.playerBulletPool, this.GAME_WIDTH, this.GAME_HEIGHT);
 
+    // Connect player to mutation system
+    this.player.mutations = this.mutationSystem;
+
     // Initialize audio
     this.audio = new AudioManager();
-    // Initialize audio on first user interaction (required by browsers)
     const initAudio = () => this.audio.init();
     document.addEventListener('click', initAudio, { once: true });
     document.addEventListener('keydown', initAudio, { once: true });
@@ -109,6 +157,75 @@ export class Game {
     // Initialize HUD
     this.hud = new HUD();
     this.hud.init();
+
+    // Wire up crystal collection callback
+    this.crystalSystem.onCollect = (type) => {
+      if (this.mutationSystem.addStack(type)) {
+        this.audio.playCrystalCollect();
+        this.hud.updateMutations(this.mutationSystem.getStacks());
+      }
+    };
+
+    // Wire up mutation display callback
+    this.mutationSystem.onMutationChange = (stacks) => {
+      this.hud.updateMutations(stacks);
+    };
+
+    // Wire up level-up trigger
+    this.levelUpSystem.onLevelUp = (upgrades, level) => {
+      this.isPaused = true;
+      this.audio.playLevelUp();
+      this.levelUpUI.show(upgrades, level);
+    };
+
+    // Wire up upgrade selection
+    this.levelUpUI.onSelect = (index) => {
+      this.levelUpSystem.selectUpgrade(index, this.player, this);
+      this.levelUpUI.hide();
+      this.isPaused = false;
+    };
+
+    // Wire up zone system callbacks
+    this.zoneSystem.onZoneComplete = (zone, stats) => {
+      this.isPaused = true;
+      const checkpointType = this.currentMode?.checkpointType || 'choice';
+      this.checkpointUI.show(zone, stats, checkpointType, this.echoSystem);
+    };
+
+    this.zoneSystem.onIntroStart = (zone, config) => {
+      this.isPaused = true;
+      const duration = this.currentMode?.zoneIntroDuration || 3;
+      this.zoneIntroUI.show(zone, config, duration);
+    };
+
+    this.zoneSystem.onZoneStart = (zone, config) => {
+      // Apply zone configuration
+      this.spawnSystem.configureZone(config);
+      this.spawnSystem.zoneTimer = 0;
+      this.voidSystem.setBaseRate(config.voidRate * (this.currentMode?.voidRateMultiplier || 1));
+    };
+
+    // Wire up checkpoint completion
+    this.checkpointUI.onComplete = (choice) => {
+      if (choice === 'bank') {
+        this.echoSystem.bank();
+      }
+      // 'carry' keeps echoes in carried, 'auto' auto-banks in void rush
+
+      // Restore 1 health at checkpoint
+      if (this.player.health < this.player.maxHealth) {
+        this.player.health++;
+      }
+
+      // Advance to next zone
+      this.zoneSystem.advanceToNextZone();
+    };
+
+    // Wire up zone intro completion
+    this.zoneIntroUI.onComplete = () => {
+      this.zoneSystem.startZone();
+      this.isPaused = false;
+    };
 
     // Setup menu event listeners
     this.setupMenuEvents();
@@ -125,15 +242,21 @@ export class Game {
   }
 
   setupMenuEvents() {
-    const escapeBtn = document.getElementById('btn-escape');
+    // Mode selection buttons
+    document.getElementById('btn-campaign')?.addEventListener('click', () => {
+      this.startRun('campaign');
+    });
 
-    escapeBtn.addEventListener('click', () => {
-      this.startRun();
+    document.getElementById('btn-voidrush')?.addEventListener('click', () => {
+      this.startRun('voidrush');
+    });
+
+    document.getElementById('btn-endless')?.addEventListener('click', () => {
+      this.startRun('endless');
     });
   }
 
   setupDeathScreenEvents() {
-    // Continue from death screen on any key press
     const continueFromDeath = () => {
       if (this.isShowingDeathScreen) {
         this.hideDeathScreen();
@@ -144,7 +267,10 @@ export class Game {
     document.getElementById('death-overlay').addEventListener('click', continueFromDeath);
   }
 
-  startRun() {
+  startRun(modeId = 'campaign') {
+    // Set game mode
+    this.currentMode = getMode(modeId);
+
     // Hide menu
     document.getElementById('menu-overlay').classList.add('hidden');
     this.isInMenu = false;
@@ -152,6 +278,35 @@ export class Game {
 
     // Reset game state
     this.resetRun();
+
+    // Apply mode configuration
+    this.applyModeConfig();
+
+    // Start first zone (skip intro for first zone)
+    const zoneConfig = this.zoneSystem.getConfig();
+    this.spawnSystem.configureZone(zoneConfig);
+    this.zoneSystem.skipIntro();
+  }
+
+  applyModeConfig() {
+    const mode = this.currentMode;
+
+    // Zone system
+    this.zoneSystem.setModeConfig(mode);
+
+    // Level-up system
+    this.levelUpSystem.levelUpInterval = mode.levelUpInterval || 45;
+
+    // Spawn system rate multiplier
+    this.spawnSystem.setSpawnRateMultiplier(mode.spawnRateMultiplier || 1);
+
+    // Void system multipliers
+    this.voidSystem.setPushbackMultiplier?.(mode.pushbackMultiplier || 1);
+
+    // Checkpoint UI duration (for void rush auto-dismiss)
+    if (mode.checkpointDuration) {
+      this.checkpointUI.setAutoDuration(mode.checkpointDuration);
+    }
   }
 
   resetRun() {
@@ -161,15 +316,21 @@ export class Game {
     // Clear all pools
     this.playerBulletPool.releaseAll();
     this.enemyBulletPool.releaseAll();
-    this.enemyPool.releaseAll();
+    this.spawnSystem.releaseAll();
 
     // Reset systems
     this.voidSystem.reset();
     this.grazeSystem.reset();
     this.spawnSystem.reset();
-    this.spawnSystem.configure(1.8, 0.10);  // Enable 10% elite spawn chance
+    this.zoneSystem.reset();
     this.echoSystem.resetRun();
+    this.crystalSystem.reset();
+    this.mutationSystem.reset();
+    this.levelUpSystem.reset();
     this.particleSystem.clear();
+
+    // Reset upgrade multipliers
+    this.crystalMagnetMultiplier = 1;
 
     // Reset run statistics
     this.runStats = {
@@ -177,7 +338,7 @@ export class Game {
       enemiesKilled: 0,
       echoesEarned: 0,
       echoesLost: 0,
-      zoneReached: 1
+      zone: 1
     };
 
     // Reset HUD
@@ -202,18 +363,14 @@ export class Game {
     // Track time survived
     this.runStats.timeSurvived += dt;
 
-    // Update zone progress (90 seconds per zone)
-    const zoneProgress = (this.runStats.timeSurvived % 90) / 90;
-    this.hud.setZoneProgress(zoneProgress);
-
-    // Check zone advancement
-    const currentZone = Math.floor(this.runStats.timeSurvived / 90) + 1;
-    if (currentZone > this.runStats.zoneReached) {
-      this.runStats.zoneReached = currentZone;
-      // Reset spawn system zone timer for new zone
-      this.spawnSystem.zoneTimer = 0;
-      // Increase elite chance per zone (Zone 2: 10%, Zone 3: 15%, etc.)
-      this.spawnSystem.eliteChance = Math.min(0.10 + (currentZone - 2) * 0.05, 0.25);
+    // Update zone system (handles zone transitions for campaign/voidrush)
+    if (this.currentMode?.hasZones) {
+      this.zoneSystem.update(dt);
+      this.hud.setZoneProgress(this.zoneSystem.getProgress());
+      this.runStats.zone = this.zoneSystem.currentZone;
+    } else {
+      // Endless mode: continuous difficulty scaling
+      this.updateEndlessDifficulty();
     }
 
     // Update input
@@ -225,19 +382,29 @@ export class Game {
     // Update player bullets
     this.playerBulletPool.update(dt, this.GAME_WIDTH, this.GAME_HEIGHT);
 
+    // Update homing on player bullets
+    const allEnemies = this.spawnSystem.getAllActive();
+    this.playerBulletPool.forEach(bullet => {
+      bullet.updateHoming(dt, allEnemies);
+    });
+
     // Update enemy bullets
     this.enemyBulletPool.update(dt, this.GAME_WIDTH, this.GAME_HEIGHT);
 
     // Update spawn system
     this.spawnSystem.update(dt);
 
-    // Update enemies
-    this.enemyPool.forEach((enemy) => {
-      enemy.update(dt, this.player.position, this.enemyBulletPool, this.GAME_WIDTH, this.GAME_HEIGHT);
-    });
+    // Update all enemies
+    this.spawnSystem.updatePools(dt, this.player.position, this.enemyBulletPool, this.GAME_WIDTH, this.GAME_HEIGHT);
 
     // Update void system
     this.voidSystem.update(dt);
+
+    // Update crystal system (with magnet multiplier)
+    this.crystalSystem.update(dt, this.player.position, this.crystalMagnetMultiplier);
+
+    // Update level-up system
+    this.levelUpSystem.update(dt);
 
     // Update particle system
     this.particleSystem.update(dt);
@@ -281,11 +448,26 @@ export class Game {
     );
   }
 
+  updateEndlessDifficulty() {
+    // Continuous difficulty scaling for endless mode
+    const difficulty = getEndlessDifficulty(this.runStats.timeSurvived);
+    const weights = getEndlessEnemyWeights(this.runStats.timeSurvived);
+
+    this.spawnSystem.enemyTypes = difficulty.enemyTypes;
+    this.spawnSystem.enemyWeights = weights;
+    this.spawnSystem.eliteChance = difficulty.eliteChance;
+    this.spawnSystem.spawnScaling[0].interval = difficulty.spawnInterval;
+    this.voidSystem.setBaseRate(difficulty.voidRate);
+  }
+
   checkCollisions() {
+    // Get all active enemies from all pools
+    const allEnemies = this.spawnSystem.getAllActive();
+
     // Player bullets vs enemies
     this.collisionSystem.checkBulletsVsEnemies(
       this.playerBulletPool.getActive(),
-      this.enemyPool.getActive(),
+      allEnemies,
       (bullet, enemy) => {
         enemy.takeDamage(bullet.damage);
         bullet.deactivate();
@@ -314,6 +496,11 @@ export class Game {
     this.runStats.enemiesKilled++;
     this.runStats.echoesEarned += enemy.echoValue;
 
+    // Track kill in zone stats
+    if (this.zoneSystem) {
+      this.zoneSystem.recordKill(enemy.echoValue);
+    }
+
     // Add echoes
     this.echoSystem.addEchoes(enemy.echoValue);
 
@@ -326,6 +513,11 @@ export class Game {
     // Spawn explosion particles
     const color = enemy.isElite ? 0xffd700 : 0xff3333;
     this.particleSystem.explosion(enemy.position.x, enemy.position.y, color, enemy.isElite ? 20 : 12);
+
+    // Spawn crystal on elite kill
+    if (enemy.isElite) {
+      this.crystalSystem.spawn(enemy.position.x, enemy.position.y);
+    }
 
     // Remove enemy
     enemy.deactivate();
@@ -358,16 +550,25 @@ export class Game {
     this.runStats.echoesLost = lostEchoes;
 
     // Update best zone
-    if (this.runStats.zoneReached > this.bestZone) {
-      this.bestZone = this.runStats.zoneReached;
+    if (this.runStats.zone > this.bestZone) {
+      this.bestZone = this.runStats.zone;
       localStorage.setItem('voidrunner_bestzone', this.bestZone.toString());
     }
 
+    // Add to leaderboard
+    const stats = {
+      zone: this.runStats.zone,
+      time: Math.floor(this.runStats.timeSurvived),
+      kills: this.runStats.enemiesKilled,
+      echoes: this.runStats.echoesEarned
+    };
+    const rank = this.leaderboard.addEntry(this.currentMode?.id || 'campaign', stats);
+
     // Show death screen
-    this.showDeathScreen(cause);
+    this.showDeathScreen(cause, rank);
   }
 
-  showDeathScreen(cause) {
+  showDeathScreen(cause, rank = 0) {
     this.isShowingDeathScreen = true;
 
     const overlay = document.getElementById('death-overlay');

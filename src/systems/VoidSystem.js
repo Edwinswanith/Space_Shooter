@@ -231,4 +231,18 @@ export class VoidSystem {
   setSpeedMultiplier(multiplier) {
     this.speedMultiplier = multiplier;
   }
+
+  setBaseRate(rate) {
+    this.baseRiseRate = rate;
+    // Scale the accelerated rates proportionally
+    this.acceleratedRate1 = rate * 1.67;  // ~1.5x faster
+    this.acceleratedRate2 = rate * 2.5;   // ~2x faster
+  }
+
+  setPushbackMultiplier(multiplier) {
+    // Scale pushback amounts for different game modes
+    this.killPushback = 1.5 * multiplier;
+    this.eliteKillPushback = 3 * multiplier;
+    this.grazePushback = 0.5 * multiplier;
+  }
 }

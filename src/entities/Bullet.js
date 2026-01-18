@@ -20,6 +20,12 @@ export class Bullet {
     this.velocity = { x: 0, y: 0 };
     this.damage = 1;
 
+    // Pierce and homing (for mutations)
+    this.pierceCount = 0;
+    this.pierceRemaining = 0;
+    this.homingAngle = 0;
+    this.hitEnemies = new Set();
+
     // Size - player bullets larger and more visible
     this.width = owner === 'player' ? 6 : 8;
     this.height = owner === 'player' ? 16 : 8;
@@ -67,6 +73,12 @@ export class Bullet {
     this.velocity.y = config.vy || 0;
     this.damage = config.damage || 1;
 
+    // Pierce and homing
+    this.pierceCount = config.pierceCount || 0;
+    this.pierceRemaining = this.pierceCount;
+    this.homingAngle = config.homingAngle || 0;
+    this.hitEnemies.clear();
+
     // Update mesh
     this.mesh.position.x = this.position.x;
     this.mesh.position.y = this.position.y;
@@ -110,6 +122,56 @@ export class Bullet {
   onRelease() {
     this.mesh.visible = false;
     this.shouldRemove = false;
+    this.hitEnemies.clear();
+    this.pierceRemaining = 0;
+  }
+
+  updateHoming(dt, enemies) {
+    if (this.homingAngle <= 0 || !this.active) return;
+
+    // Find closest enemy within range
+    let closest = null;
+    let closestDist = 300; // Max homing range
+
+    for (const enemy of enemies) {
+      if (!enemy.active || this.hitEnemies.has(enemy)) continue;
+
+      const dx = enemy.position.x - this.position.x;
+      const dy = enemy.position.y - this.position.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < closestDist) {
+        closest = enemy;
+        closestDist = dist;
+      }
+    }
+
+    if (!closest) return;
+
+    // Calculate angle to enemy
+    const dx = closest.position.x - this.position.x;
+    const dy = closest.position.y - this.position.y;
+    const targetAngle = Math.atan2(dx, dy);
+
+    // Current velocity angle
+    const currentAngle = Math.atan2(this.velocity.x, this.velocity.y);
+
+    // Angle difference
+    let angleDiff = targetAngle - currentAngle;
+
+    // Normalize to -PI to PI
+    while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+    while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+
+    // Clamp turn rate
+    const maxTurn = this.homingAngle * dt * 60;
+    angleDiff = Math.max(-maxTurn, Math.min(maxTurn, angleDiff));
+
+    // Apply rotation
+    const newAngle = currentAngle + angleDiff;
+    const speed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
+    this.velocity.x = Math.sin(newAngle) * speed;
+    this.velocity.y = Math.cos(newAngle) * speed;
   }
 
   // Get hitbox for collision detection

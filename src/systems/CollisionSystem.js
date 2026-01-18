@@ -13,7 +13,7 @@ export class CollisionSystem {
     );
   }
 
-  // Check bullets against enemies
+  // Check bullets against enemies (with pierce support)
   checkBulletsVsEnemies(bullets, enemies, onHit) {
     for (let i = bullets.length - 1; i >= 0; i--) {
       const bullet = bullets[i];
@@ -25,11 +25,25 @@ export class CollisionSystem {
         const enemy = enemies[j];
         if (!enemy.active || enemy.shouldRemove) continue;
 
+        // Skip if already hit (pierce)
+        if (bullet.hitEnemies && bullet.hitEnemies.has(enemy)) continue;
+
         const enemyBox = enemy.getHitbox();
 
         if (this.checkAABB(bulletBox, enemyBox)) {
+          // Track hit for pierce
+          if (bullet.hitEnemies) {
+            bullet.hitEnemies.add(enemy);
+          }
+
           onHit(bullet, enemy);
-          break; // Bullet can only hit one enemy
+
+          // Pierce logic: only break if no pierce remaining
+          if (!bullet.pierceRemaining || bullet.pierceRemaining <= 0) {
+            break; // Normal behavior - stop on first hit
+          }
+          // else continue checking other enemies (pierce through)
+          bullet.pierceRemaining--;
         }
       }
     }

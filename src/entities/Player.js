@@ -71,6 +71,10 @@ export class Player {
     this.onShoot = null;
     this.onDash = null;
 
+    // Mutations (set by Game.js)
+    this.mutations = null;
+    this.damageMultiplier = 1;
+
     // Create visual
     this.createMesh();
   }
@@ -266,21 +270,45 @@ export class Player {
   updateFiring(dt, isFireHeld) {
     this.fireTimer += dt;
 
-    if (isFireHeld && this.fireTimer >= this.fireInterval) {
+    // Apply fury mutation fire rate
+    const fireRateMultiplier = this.mutations ? this.mutations.getFireRateMultiplier() : 1;
+    const adjustedInterval = this.fireInterval / fireRateMultiplier;
+
+    if (isFireHeld && this.fireTimer >= adjustedInterval) {
       this.fireTimer = 0;
       this.fire();
     }
   }
 
   fire() {
-    const bullet = this.bulletPool.acquire();
-    bullet.init({
-      x: this.position.x,
-      y: this.position.y + 20,
-      vx: 0,
-      vy: CONFIG.bulletSpeed,
-      damage: CONFIG.baseDamage
-    });
+    // Get mutation values
+    const bulletCount = this.mutations ? this.mutations.getBulletCount() : 1;
+    const pierceCount = this.mutations ? this.mutations.getPierceCount() : 0;
+    const homingAngle = this.mutations ? this.mutations.getHomingAngle() : 0;
+
+    // Spread angle between bullets (10 degrees)
+    const spreadAngle = 10 * (Math.PI / 180);
+    const startAngle = -((bulletCount - 1) / 2) * spreadAngle;
+
+    for (let i = 0; i < bulletCount; i++) {
+      const angle = startAngle + (i * spreadAngle);
+      const bullet = this.bulletPool.acquire();
+
+      // Rotate velocity by angle
+      const baseVy = CONFIG.bulletSpeed;
+      const vx = Math.sin(angle) * baseVy;
+      const vy = Math.cos(angle) * baseVy;
+
+      bullet.init({
+        x: this.position.x,
+        y: this.position.y + 20,
+        vx: vx,
+        vy: vy,
+        damage: CONFIG.baseDamage * this.damageMultiplier,
+        pierceCount: pierceCount,
+        homingAngle: homingAngle
+      });
+    }
 
     if (this.onShoot) this.onShoot();
   }

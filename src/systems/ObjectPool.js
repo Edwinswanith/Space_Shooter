@@ -48,6 +48,16 @@ export class ObjectPool {
     }
   }
 
+  releaseInactive() {
+    // Release objects marked for removal (shouldRemove = true)
+    for (let i = this.active.length - 1; i >= 0; i--) {
+      const obj = this.active[i];
+      if (obj.shouldRemove) {
+        this.release(obj);
+      }
+    }
+  }
+
   update(dt, ...args) {
     // Update all active objects, release those marked for removal
     for (let i = this.active.length - 1; i >= 0; i--) {
