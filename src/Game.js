@@ -270,6 +270,7 @@ export class Game {
   startRun(modeId = 'campaign') {
     // Set game mode
     this.currentMode = getMode(modeId);
+    this.currentModeId = modeId;
 
     // Hide menu
     document.getElementById('menu-overlay').classList.add('hidden');
@@ -282,9 +283,13 @@ export class Game {
     // Apply mode configuration
     this.applyModeConfig();
 
+    // Update HUD with mode indicator
+    this.hud.setMode(modeId);
+
     // Start first zone (skip intro for first zone)
     const zoneConfig = this.zoneSystem.getConfig();
     this.spawnSystem.configureZone(zoneConfig);
+    this.hud.setZoneInfo(zoneConfig.id, zoneConfig.name, this.currentMode.zoneDuration || 90);
     this.zoneSystem.skipIntro();
   }
 
@@ -367,6 +372,12 @@ export class Game {
     if (this.currentMode?.hasZones) {
       this.zoneSystem.update(dt);
       this.hud.setZoneProgress(this.zoneSystem.getProgress());
+
+      // Update zone info display
+      const zoneConfig = this.zoneSystem.getConfig();
+      const timeRemaining = this.zoneSystem.getTimeRemaining();
+      this.hud.setZoneInfo(zoneConfig.id, zoneConfig.name, timeRemaining);
+
       this.runStats.zone = this.zoneSystem.currentZone;
     } else {
       // Endless mode: continuous difficulty scaling

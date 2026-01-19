@@ -8,6 +8,9 @@ export class HUD {
     this.voidFill = null;
     this.voidIndicator = null;
     this.zoneFill = null;
+    this.zoneLabel = null;
+    this.zoneTime = null;
+    this.modeTag = null;
     this.dashRing = null;
     this.mutationPips = null;
 
@@ -26,6 +29,9 @@ export class HUD {
     this.voidFill = document.getElementById('void-fill');
     this.voidIndicator = document.getElementById('void-indicator');
     this.zoneFill = document.getElementById('zone-fill');
+    this.zoneLabel = document.getElementById('zone-label');
+    this.zoneTime = document.getElementById('zone-time');
+    this.modeTag = document.querySelector('.mode-tag');
     this.dashRing = document.querySelector('.dash-ring');
     this.mutationPips = document.querySelectorAll('.mutation-pip');
   }
@@ -233,22 +239,53 @@ export class HUD {
     this.zoneFill.style.width = `${progress * 100}%`;
   }
 
+  // Update zone info display
+  setZoneInfo(zoneNum, zoneName, timeRemaining) {
+    if (this.zoneLabel) {
+      const numEl = this.zoneLabel.querySelector('.zone-num');
+      const nameEl = this.zoneLabel.querySelector('.zone-name');
+      if (numEl) numEl.textContent = zoneNum;
+      if (nameEl) nameEl.textContent = zoneName;
+    }
+    if (this.zoneTime) {
+      this.zoneTime.textContent = `${Math.ceil(timeRemaining)}s`;
+    }
+  }
+
+  // Set game mode indicator
+  setMode(modeId) {
+    if (!this.modeTag) return;
+
+    // Remove previous mode classes
+    this.modeTag.classList.remove('campaign', 'voidrush', 'endless');
+
+    switch (modeId) {
+      case 'voidrush':
+        this.modeTag.textContent = 'VOID RUSH';
+        this.modeTag.classList.add('voidrush');
+        break;
+      case 'endless':
+        this.modeTag.textContent = 'ENDLESS';
+        this.modeTag.classList.add('endless');
+        break;
+      default:
+        this.modeTag.textContent = 'CAMPAIGN';
+        this.modeTag.classList.add('campaign');
+    }
+  }
+
   // Update mutation pips display
   updateMutations(stacks) {
     const types = ['fury', 'scatter', 'pierce', 'seeker'];
-    const colors = {
-      fury: '#ff4444',
-      scatter: '#ffff44',
-      pierce: '#4444ff',
-      seeker: '#44ff44'
-    };
 
     let pipIndex = 0;
     for (const type of types) {
       for (let i = 0; i < stacks[type]; i++) {
         if (pipIndex < this.mutationPips.length) {
-          this.mutationPips[pipIndex].style.backgroundColor = colors[type];
-          this.mutationPips[pipIndex].classList.add('active');
+          // Remove all type classes first
+          this.mutationPips[pipIndex].classList.remove('fury', 'scatter', 'pierce', 'seeker');
+          // Add the correct type class
+          this.mutationPips[pipIndex].classList.add(type);
           pipIndex++;
         }
       }
@@ -256,8 +293,7 @@ export class HUD {
 
     // Clear remaining pips
     for (let i = pipIndex; i < this.mutationPips.length; i++) {
-      this.mutationPips[i].style.backgroundColor = 'transparent';
-      this.mutationPips[i].classList.remove('active');
+      this.mutationPips[i].classList.remove('fury', 'scatter', 'pierce', 'seeker');
     }
   }
 

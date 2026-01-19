@@ -162,6 +162,38 @@
     .corner-frame.bottom-right::before { width: 30px; height: 2px; bottom: 0; right: 0; }
     .corner-frame.bottom-right::after { width: 2px; height: 30px; bottom: 0; right: 0; }
 
+    /* Mode Indicator */
+    #mode-indicator {
+      position: absolute;
+      top: 25px;
+      left: 50%;
+      transform: translateX(-50%);
+      margin-top: -5px;
+    }
+
+    .mode-tag {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 3px;
+      padding: 4px 12px;
+      border: 1px solid var(--cyan);
+      background: rgba(0, 255, 255, 0.1);
+      color: var(--cyan);
+    }
+
+    .mode-tag.voidrush {
+      border-color: var(--red);
+      background: rgba(255, 50, 50, 0.1);
+      color: var(--red);
+    }
+
+    .mode-tag.endless {
+      border-color: var(--purple);
+      background: rgba(139, 0, 255, 0.1);
+      color: var(--purple-bright);
+    }
+
     /* Shields */
     #shields {
       position: absolute;
@@ -356,28 +388,36 @@
     }
 
     /* Zone Progress */
-    #zone-progress {
+    #zone-progress-container {
       position: absolute;
-      top: 20px;
+      top: 50px;
       left: 50%;
       transform: translateX(-50%);
+      text-align: center;
+    }
+
+    #zone-label {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--cyan);
+      text-shadow: 0 0 10px var(--cyan);
+      letter-spacing: 3px;
+      margin-bottom: 8px;
+    }
+
+    #zone-label .zone-name {
+      color: var(--purple-bright);
+      margin-left: 8px;
+    }
+
+    #zone-progress {
       width: 280px;
-      height: 3px;
+      height: 4px;
       background: rgba(0, 255, 255, 0.1);
       border-radius: 2px;
       overflow: hidden;
-    }
-
-    #zone-progress::before {
-      content: 'ZONE PROGRESS';
-      position: absolute;
-      top: -18px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 9px;
-      color: var(--text-dim);
-      letter-spacing: 3px;
+      border: 1px solid rgba(0, 255, 255, 0.2);
     }
 
     #zone-fill {
@@ -388,25 +428,65 @@
       box-shadow: 0 0 10px var(--cyan);
     }
 
+    #zone-time {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: 2px;
+      margin-top: 6px;
+    }
+
     /* Mutations */
-    #mutations {
+    #mutations-container {
       position: absolute;
-      bottom: 60px;
+      bottom: 70px;
       left: 25px;
+    }
+
+    .mutations-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 9px;
+      color: var(--text-dim);
+      letter-spacing: 2px;
+      margin-bottom: 6px;
+    }
+
+    #mutations {
       display: flex;
-      gap: 4px;
+      gap: 6px;
     }
 
     .mutation-pip {
-      width: 12px;
-      height: 12px;
-      border: 1px solid #444;
-      background: transparent;
-      transition: background 0.2s, box-shadow 0.2s;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #333;
+      background: rgba(0,0,0,0.5);
+      transition: all 0.3s ease;
+      clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
     }
 
-    .mutation-pip.active {
-      box-shadow: 0 0 8px currentColor;
+    .mutation-pip.fury {
+      border-color: var(--red);
+      background: var(--red);
+      box-shadow: 0 0 10px var(--red);
+    }
+
+    .mutation-pip.scatter {
+      border-color: var(--yellow);
+      background: var(--yellow);
+      box-shadow: 0 0 10px var(--yellow);
+    }
+
+    .mutation-pip.pierce {
+      border-color: var(--cyan);
+      background: var(--cyan);
+      box-shadow: 0 0 10px var(--cyan);
+    }
+
+    .mutation-pip.seeker {
+      border-color: var(--green);
+      background: var(--green);
+      box-shadow: 0 0 10px var(--green);
     }
 
     /* Dash Cooldown */
@@ -1438,6 +1518,10 @@
       <div class="corner-frame bottom-left hud-gameplay-only"></div>
       <div class="corner-frame bottom-right hud-gameplay-only"></div>
 
+      <div id="mode-indicator" class="hud-gameplay-only">
+        <span class="mode-tag">CAMPAIGN</span>
+      </div>
+
       <div id="shields" class="hud-gameplay-only">
         <span class="shield-label">SHIELDS</span>
         <div class="shield"></div>
@@ -1457,17 +1541,24 @@
         <div class="void-state-status">CALM</div>
       </div>
 
-      <div id="zone-progress" class="hud-gameplay-only">
-        <div id="zone-fill" style="width: 0%"></div>
+      <div id="zone-progress-container" class="hud-gameplay-only">
+        <div id="zone-label">ZONE <span class="zone-num">1</span><span class="zone-name">BREACH</span></div>
+        <div id="zone-progress">
+          <div id="zone-fill" style="width: 0%"></div>
+        </div>
+        <div id="zone-time">90s</div>
       </div>
 
-      <div id="mutations" class="hud-gameplay-only">
-        <div class="mutation-pip"></div>
-        <div class="mutation-pip"></div>
-        <div class="mutation-pip"></div>
-        <div class="mutation-pip"></div>
-        <div class="mutation-pip"></div>
-        <div class="mutation-pip"></div>
+      <div id="mutations-container" class="hud-gameplay-only">
+        <div class="mutations-label">MUTATIONS</div>
+        <div id="mutations">
+          <div class="mutation-pip"></div>
+          <div class="mutation-pip"></div>
+          <div class="mutation-pip"></div>
+          <div class="mutation-pip"></div>
+          <div class="mutation-pip"></div>
+          <div class="mutation-pip"></div>
+        </div>
       </div>
 
       <div id="dash-cooldown" class="hud-gameplay-only">

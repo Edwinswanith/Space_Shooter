@@ -113,6 +113,10 @@ export class ZoneSystem {
     return Math.min(1, this.zoneTimer / this.zoneDuration);
   }
 
+  getTimeRemaining() {
+    return Math.max(0, this.zoneDuration - this.zoneTimer);
+  }
+
   // Track kills for zone stats
   recordKill(echoValue) {
     this.zoneStats.kills++;

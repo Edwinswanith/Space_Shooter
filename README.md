@@ -7,6 +7,9 @@ A fast-paced 2D space shooter built with Three.js where players escape a rising 
 ### Main Menu
 ![Main Menu](screenshots/menu.png)
 
+### Gameplay
+![Gameplay](screenshots/gameplay.png)
+
 ### Death Screen
 ![Death Screen](screenshots/death.png)
 
